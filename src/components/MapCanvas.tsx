@@ -12,19 +12,27 @@ import {
   TYRIA_MAX_ZOOM,
 } from "../domain/coordinates";
 import { appEvents } from "../domain/events";
-import type { ContinentPoint, Heart, PlayerSnapshot } from "../domain/types";
+import type {
+  ContinentPoint,
+  Heart,
+  PlayerSnapshot,
+  PointOfInterest,
+} from "../domain/types";
 import { QUEENSDALE } from "../data/queensdale";
 
 interface MapCanvasProps {
   hearts: Heart[];
-  completed: Set<number>;
+  pois: PointOfInterest[];
+  completedHearts: Set<number>;
+  completedPois: Set<number>;
   suggestedId: number | null;
   player: PlayerSnapshot;
   focusedHeart: Heart | null;
-  onToggle: (heart: Heart, anchor: HTMLElement) => void;
+  onToggleHeart: (heart: Heart, anchor: HTMLElement) => void;
+  onTogglePoi: (poi: PointOfInterest, anchor: HTMLElement) => void;
 }
 
-interface HeartOverlay {
+interface ObjectiveOverlay {
   overlay: Overlay;
   element: HTMLButtonElement;
 }
@@ -83,21 +91,28 @@ function updateHeartElement(
   element.textContent = complete ? "♥" : "♡";
 }
 
+function updatePoiElement(element: HTMLButtonElement, complete: boolean) {
+  element.className = `map-poi ${complete ? "is-complete" : ""}`;
+}
+
 export function MapCanvas({
   hearts,
-  completed,
+  pois,
+  completedHearts,
+  completedPois,
   suggestedId,
   player,
   focusedHeart,
-  onToggle,
+  onToggleHeart,
+  onTogglePoi,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
-  const heartOverlaysRef = useRef(new globalThis.Map<number, HeartOverlay>());
+  const heartOverlaysRef = useRef(new globalThis.Map<number, ObjectiveOverlay>());
+  const poiOverlaysRef = useRef(new globalThis.Map<number, ObjectiveOverlay>());
   const playerOverlayRef = useRef<Overlay | null>(null);
   const playerElementRef = useRef<HTMLDivElement | null>(null);
   const [following, setFollowing] = useState(false);
-  const [headingUp, setHeadingUp] = useState(false);
   const playerAvailable = player.connected && player.position !== null;
 
   useEffect(() => {
@@ -132,8 +147,6 @@ export function MapCanvas({
     });
     map.on("pointerdrag", () => {
       setFollowing(false);
-      setHeadingUp(false);
-      map.getView().setRotation(0);
     });
     mapRef.current = map;
 
@@ -164,7 +177,7 @@ export function MapCanvas({
         element.type = "button";
         element.title = `Level ${heart.level} · ${heart.name}`;
         element.ariaLabel = `${heart.name}, level ${heart.level}`;
-        element.addEventListener("click", () => onToggle(heart, element));
+        element.addEventListener("click", () => onToggleHeart(heart, element));
         shell.append(element);
         const overlay = new Overlay({
           element: shell,
@@ -178,11 +191,48 @@ export function MapCanvas({
       }
       updateHeartElement(
         heartOverlay.element,
-        completed.has(heart.id),
+        completedHearts.has(heart.id),
         suggestedId === heart.id,
       );
     }
-  }, [completed, hearts, onToggle, suggestedId]);
+  }, [completedHearts, hearts, onToggleHeart, suggestedId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const activeIds = new Set(pois.map((poi) => poi.id));
+
+    for (const [id, poiOverlay] of poiOverlaysRef.current) {
+      if (!activeIds.has(id)) {
+        map.removeOverlay(poiOverlay.overlay);
+        poiOverlaysRef.current.delete(id);
+      }
+    }
+
+    for (const poi of pois) {
+      let poiOverlay = poiOverlaysRef.current.get(poi.id);
+      if (!poiOverlay) {
+        const shell = document.createElement("div");
+        shell.className = "map-icon-shell";
+        const element = document.createElement("button");
+        element.type = "button";
+        element.title = `${poi.name} · Point of interest`;
+        element.ariaLabel = `${poi.name}, point of interest`;
+        element.addEventListener("click", () => onTogglePoi(poi, element));
+        shell.append(element);
+        const overlay = new Overlay({
+          element: shell,
+          positioning: "center-center",
+          position: toMapCoordinate(poi.coordinate),
+          stopEvent: true,
+        });
+        map.addOverlay(overlay);
+        poiOverlay = { element, overlay };
+        poiOverlaysRef.current.set(poi.id, poiOverlay);
+      }
+      updatePoiElement(poiOverlay.element, completedPois.has(poi.id));
+    }
+  }, [completedPois, onTogglePoi, pois]);
 
   useEffect(
     () =>
@@ -224,22 +274,19 @@ export function MapCanvas({
     }
 
     if (following) map.getView().setCenter(location);
-    if (headingUp) map.getView().setRotation(-(player.heading ?? 0));
     playerElementRef.current?.style.setProperty(
       "--heading",
-      `${headingUp ? 0 : (player.heading ?? 0)}rad`,
+      `${player.heading ?? 0}rad`,
     );
-  }, [following, headingUp, player]);
+  }, [following, player]);
 
   useEffect(() => {
     if (!focusedHeart) return;
     const map = mapRef.current;
     if (!map) return;
     setFollowing(false);
-    setHeadingUp(false);
     map.getView().animate({
       center: toMapCoordinate(focusedHeart.coordinate),
-      rotation: 0,
       zoom: TYRIA_MAX_ZOOM,
       duration: 550,
     });
@@ -249,32 +296,12 @@ export function MapCanvas({
     if (!player.position) return;
     const next = !following;
     setFollowing(next);
-    if (!next) {
-      setHeadingUp(false);
-      mapRef.current?.getView().animate({ rotation: 0, duration: 250 });
-      return;
-    }
+    if (!next) return;
     mapRef.current?.getView().animate({
       center: toMapCoordinate(player.position),
       duration: 300,
     });
   }, [following, player.position]);
-
-  const toggleHeadingUp = useCallback(() => {
-    if (!player.position) return;
-    const next = !headingUp;
-    setHeadingUp(next);
-    if (next) {
-      setFollowing(true);
-      mapRef.current?.getView().animate({
-        center: toMapCoordinate(player.position),
-        rotation: -(player.heading ?? 0),
-        duration: 300,
-      });
-    } else {
-      mapRef.current?.getView().animate({ rotation: 0, duration: 300 });
-    }
-  }, [headingUp, player.heading, player.position]);
 
   return (
     <>
@@ -294,16 +321,13 @@ export function MapCanvas({
           <span aria-hidden="true">⌖</span>
           <small>{following ? "Following" : "Follow"}</small>
         </button>
-        <button
-          className={headingUp ? "is-active" : ""}
-          disabled={!playerAvailable}
-          onClick={toggleHeadingUp}
-          aria-pressed={headingUp}
-          title={headingUp ? "Keep north up" : "Keep player direction up"}
-        >
-          <span className="heading-icon" aria-hidden="true">↑</span>
-          <small>{headingUp ? "Heading up" : "North up"}</small>
-        </button>
+      </div>
+      <div className="map-legend" aria-label="Map objective legend">
+        <span className="legend-poi" aria-hidden="true" />
+        <span>
+          <strong>{completedPois.size} / {pois.length}</strong>
+          points of interest
+        </span>
       </div>
     </>
   );

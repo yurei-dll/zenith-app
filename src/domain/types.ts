@@ -19,7 +19,14 @@ export interface Heart {
   coordinate: ContinentPoint;
 }
 
+export interface PointOfInterest {
+  id: number;
+  name: string;
+  coordinate: ContinentPoint;
+}
+
 export interface CompletionState {
   completedHeartIds: number[];
+  completedPoiIds?: number[];
   updatedAt: string;
 }

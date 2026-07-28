@@ -71,10 +71,14 @@ layer boundary. World wrapping is disabled and OpenLayers requests only the
 visible tile subset. At zoom 4 Queensdale intersects 6 tiles; even at maximum
 zoom it intersects only 150.
 
-The player controls in the map's upper-right corner support focus/follow and an
-optional heading-up mode. Heading-up enables follow automatically and rotates
-the view so the player's forward vector remains at twelve o'clock. Dragging the
-map or selecting an objective returns to an ordinary north-up view.
+The player control in the map's upper-right corner supports focus/follow.
+Dragging the map or selecting an objective exits follow mode while preserving a
+stable north-up view.
+
+Queensdale's landmark POIs are layered from the public map payload rather than
+assumed to be legible in the raster tiles. They can be toggled manually and
+remain visible in a muted gray completed state. Existing heart completion
+storage is migrated additively to retain prior progress.
 
 ## Data and attribution
 

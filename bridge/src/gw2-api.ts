@@ -20,6 +20,13 @@ interface ApiTask {
   coord: [number, number];
 }
 
+interface ApiPointOfInterest {
+  id: number;
+  name?: string;
+  type: string;
+  coord: [number, number];
+}
+
 interface ApiMap {
   id: number;
   name: string;
@@ -28,6 +35,7 @@ interface ApiMap {
   map_rect: [[number, number], [number, number]];
   continent_rect: [[number, number], [number, number]];
   tasks: Record<string, ApiTask>;
+  points_of_interest: Record<string, ApiPointOfInterest>;
 }
 
 export interface NormalizedMap {
@@ -41,6 +49,11 @@ export interface NormalizedMap {
     id: number;
     name: string;
     level: number;
+    coordinate: [number, number];
+  }>;
+  pointsOfInterest: Array<{
+    id: number;
+    name: string;
     coordinate: [number, number];
   }>;
 }
@@ -81,6 +94,17 @@ export class Gw2ApiClient {
           coordinate: task.coord,
         }))
         .sort((a, b) => a.level - b.level || a.id - b.id),
+      pointsOfInterest: Object.values(map.points_of_interest)
+        .filter(
+          (point): point is ApiPointOfInterest & { name: string } =>
+            point.type === "landmark" && typeof point.name === "string",
+        )
+        .map((point) => ({
+          id: point.id,
+          name: point.name,
+          coordinate: point.coord,
+        }))
+        .sort((a, b) => a.id - b.id),
     };
   }
 

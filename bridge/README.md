@@ -39,7 +39,7 @@ The backend listens only on `127.0.0.1:38421`.
 | `GET /api/health` | Backend, telemetry, and API-cache status |
 | `GET /api/player` | Latest normalized player snapshot |
 | `GET /api/maps` | IDs explicitly registered with the backend |
-| `GET /api/maps/15` | Normalized Queensdale metadata and hearts |
+| `GET /api/maps/15` | Normalized Queensdale metadata, hearts, and landmark POIs |
 | `GET /api/maps/15?refresh=1` | Force an upstream refresh |
 | `WS /` | Player snapshots at 10 Hz |
 

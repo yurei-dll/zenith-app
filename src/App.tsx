@@ -2,9 +2,13 @@ import { useCallback, useMemo, useState } from "react";
 import { CompletionEffects } from "./components/CompletionEffects";
 import { HeartList } from "./components/HeartList";
 import { MapCanvas } from "./components/MapCanvas";
-import { QUEENSDALE, QUEENSDALE_HEARTS } from "./data/queensdale";
+import {
+  QUEENSDALE,
+  QUEENSDALE_HEARTS,
+  QUEENSDALE_POIS,
+} from "./data/queensdale";
 import { appEvents } from "./domain/events";
-import type { Heart } from "./domain/types";
+import type { Heart, PointOfInterest } from "./domain/types";
 import { useCompletion } from "./hooks/useCompletion";
 import { usePlayerSocket } from "./hooks/usePlayerSocket";
 
@@ -24,17 +28,22 @@ function nearestIncompleteHeart(
 
 export default function App() {
   const player = usePlayerSocket();
-  const { completed, toggle } = useCompletion();
+  const {
+    completedHearts,
+    completedPois,
+    toggleHeart: persistHeart,
+    togglePoi: persistPoi,
+  } = useCompletion();
   const [focusedHeart, setFocusedHeart] = useState<Heart | null>(null);
   const suggested = useMemo(
-    () => nearestIncompleteHeart(completed, player.position),
-    [completed, player.position],
+    () => nearestIncompleteHeart(completedHearts, player.position),
+    [completedHearts, player.position],
   );
 
   const toggleHeart = useCallback(
     (heart: Heart, anchor: HTMLElement) => {
-      const becameCompleted = !completed.has(heart.id);
-      toggle(heart.id);
+      const becameCompleted = !completedHearts.has(heart.id);
+      persistHeart(heart.id);
       if (becameCompleted) {
         const rect = anchor.getBoundingClientRect();
         anchor.classList.remove("heart-bounce");
@@ -47,7 +56,12 @@ export default function App() {
         });
       }
     },
-    [completed, toggle],
+    [completedHearts, persistHeart],
+  );
+
+  const togglePoi = useCallback(
+    (poi: PointOfInterest) => persistPoi(poi.id),
+    [persistPoi],
   );
 
   return (
@@ -73,19 +87,19 @@ export default function App() {
           <div className="progress-card">
             <div>
               <span>HEARTS</span>
-              <strong>{completed.size}<small> / {QUEENSDALE_HEARTS.length}</small></strong>
+              <strong>{completedHearts.size}<small> / {QUEENSDALE_HEARTS.length}</small></strong>
             </div>
             <div className="progress-track">
-              <i style={{ width: `${(completed.size / QUEENSDALE_HEARTS.length) * 100}%` }} />
+              <i style={{ width: `${(completedHearts.size / QUEENSDALE_HEARTS.length) * 100}%` }} />
             </div>
           </div>
           <div className="list-heading">
             <h2>Renown hearts</h2>
-            <span>{QUEENSDALE_HEARTS.length - completed.size} remaining</span>
+            <span>{QUEENSDALE_HEARTS.length - completedHearts.size} remaining</span>
           </div>
           <HeartList
             hearts={QUEENSDALE_HEARTS}
-            completed={completed}
+            completed={completedHearts}
             suggestedId={suggested?.id ?? null}
             onSelect={setFocusedHeart}
             onToggle={toggleHeart}
@@ -95,11 +109,14 @@ export default function App() {
         <section className="map-panel">
           <MapCanvas
             hearts={QUEENSDALE_HEARTS}
-            completed={completed}
+            pois={QUEENSDALE_POIS}
+            completedHearts={completedHearts}
+            completedPois={completedPois}
             suggestedId={suggested?.id ?? null}
             player={player}
             focusedHeart={focusedHeart}
-            onToggle={toggleHeart}
+            onToggleHeart={toggleHeart}
+            onTogglePoi={togglePoi}
           />
           <div className="map-wash" aria-hidden="true" />
           {suggested && (
