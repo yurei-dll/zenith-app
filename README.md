@@ -45,7 +45,7 @@ GW2 MumbleLink shared memory
 local bridge / snapshot adapter ── ws://127.0.0.1:38421
                                       │ normalized PlayerSnapshot
                                       ▼
-React state ── Leaflet map ── completion store (localStorage)
+React state ── OpenLayers map ── completion store (localStorage)
                    │
                    └── explicit domain events ── celebration effects
 ```
@@ -61,9 +61,14 @@ must first become game/event-coordinate inches before applying a map's
 continent `playerX`/`playerY`, which the native adapter can prefer when valid.
 
 The map uses each zone's `continent_rect` as both its movement boundary and tile
-layer boundary. World wrapping is disabled and Leaflet keeps only a one-tile
-offscreen buffer. At zoom 4 Queensdale intersects 6 tiles; even at maximum zoom
-it intersects only 150, while the browser requests just the visible subset.
+layer boundary. World wrapping is disabled and OpenLayers requests only the
+visible tile subset. At zoom 4 Queensdale intersects 6 tiles; even at maximum
+zoom it intersects only 150.
+
+The player controls in the map's upper-right corner support focus/follow and an
+optional heading-up mode. Heading-up enables follow automatically and rotates
+the view so the player's forward vector remains at twelve o'clock. Dragging the
+map or selecting an objective returns to an ordinary north-up view.
 
 ## Data and attribution
 
