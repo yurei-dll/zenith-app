@@ -87,15 +87,28 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--gold-bright); o
 
 .map-panel { min-width: 0; position: relative; overflow: hidden; background: #243128; }
 .map-canvas { position: absolute; inset: 0; background: #2c3a30; }
-.leaflet-container { font-family: "DM Sans", sans-serif; }
-.leaflet-tile {
+.ol-viewport { font-family: "DM Sans", sans-serif; }
+.ol-layer canvas {
   filter: saturate(.96) brightness(1.08) contrast(.92) sepia(.035);
 }
-.leaflet-control-attribution { background: rgba(5,14,11,.8) !important; color: #809087; }
-.leaflet-control-attribution a { color: #d7b96d; }
-.leaflet-bar a { background: #0e211b; color: #dbc47f; border-color: rgba(230,189,104,.2); }
-.leaflet-tooltip { background: #0b1a16; border: 1px solid rgba(230,189,104,.38); color: #dbe7df; box-shadow: 0 6px 24px #0008; }
-.leaflet-tooltip::before { border-top-color: rgba(230,189,104,.38) !important; }
+.ol-control { background: rgba(7, 21, 16, .42); border-radius: 2px; padding: 2px; }
+.ol-control:hover { background: rgba(7, 21, 16, .65); }
+.ol-control button {
+  background: #0e211b;
+  color: #dbc47f;
+  border: 1px solid rgba(230,189,104,.16);
+  border-radius: 0;
+}
+.ol-control button:hover, .ol-control button:focus { background: #193329; }
+.ol-zoom { top: auto; left: auto; right: 12px; bottom: 12px; }
+.ol-attribution {
+  right: 11px;
+  bottom: 0;
+  color: #809087;
+  background: rgba(5,14,11,.78);
+}
+.ol-attribution ul { color: #809087; text-shadow: none; font-size: 10px; }
+.ol-attribution a { color: #d7b96d; }
 .map-wash {
   position: absolute;
   inset: 0;
@@ -104,6 +117,50 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--gold-bright); o
   background: linear-gradient(145deg, rgba(255, 226, 157, .045), transparent 45%);
   box-shadow: inset 0 0 70px rgba(15, 25, 17, .2);
 }
+.player-controls {
+  position: absolute;
+  z-index: 650;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  gap: 7px;
+}
+.player-controls button {
+  min-width: 62px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  padding: 5px 8px;
+  cursor: pointer;
+  color: #aebdb5;
+  background: rgba(8, 25, 19, .88);
+  border: 1px solid rgba(230, 189, 104, .24);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .3);
+  backdrop-filter: blur(8px);
+  transition: color .2s, border-color .2s, background .2s, transform .2s;
+}
+.player-controls button:hover:not(:disabled) {
+  color: #f4dfaa;
+  border-color: rgba(230, 189, 104, .52);
+  transform: translateY(-1px);
+}
+.player-controls button.is-active {
+  color: var(--gold-bright);
+  border-color: rgba(255, 219, 134, .65);
+  background: rgba(50, 54, 27, .9);
+}
+.player-controls button:disabled { cursor: not-allowed; opacity: .38; }
+.player-controls button span { font: 21px/1 Marcellus, serif; }
+.player-controls button small {
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.heading-icon { transition: transform .25s; }
+.player-controls button.is-active .heading-icon { transform: rotate(45deg); }
 .map-icon-shell { background: none; border: 0; }
 .map-heart {
   width: 36px; height: 36px; border-radius: 50%; cursor: pointer;

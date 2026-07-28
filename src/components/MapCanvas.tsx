@@ -1,8 +1,18 @@
-import L from "leaflet";
-import { useEffect, useRef } from "react";
-import { continentToLeaflet } from "../domain/coordinates";
+import Map from "ol/Map";
+import Overlay from "ol/Overlay";
+import View from "ol/View";
+import { defaults as defaultControls } from "ol/control/defaults";
+import TileLayer from "ol/layer/Tile";
+import Projection from "ol/proj/Projection";
+import XYZ from "ol/source/XYZ";
+import TileGrid from "ol/tilegrid/TileGrid";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  continentBoundsToTileRange,
+  TYRIA_MAX_ZOOM,
+} from "../domain/coordinates";
 import { appEvents } from "../domain/events";
-import type { Heart, PlayerSnapshot } from "../domain/types";
+import type { ContinentPoint, Heart, PlayerSnapshot } from "../domain/types";
 import { QUEENSDALE } from "../data/queensdale";
 
 interface MapCanvasProps {
@@ -14,13 +24,63 @@ interface MapCanvasProps {
   onToggle: (heart: Heart, anchor: HTMLElement) => void;
 }
 
-function heartIcon(complete: boolean, suggested: boolean) {
-  return L.divIcon({
-    className: "map-icon-shell",
-    html: `<button class="map-heart ${complete ? "is-complete" : ""} ${suggested ? "is-suggested" : ""}" aria-label="Heart objective">${complete ? "♥" : "♡"}</button>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-  });
+interface HeartOverlay {
+  overlay: Overlay;
+  element: HTMLButtonElement;
+}
+
+const TYRIA_SIZE: ContinentPoint = [81920, 114688];
+const TYRIA_EXTENT = [0, -TYRIA_SIZE[1], TYRIA_SIZE[0], 0];
+const QUEENSDALE_EXTENT = [
+  QUEENSDALE.bounds[0][0],
+  -QUEENSDALE.bounds[1][1],
+  QUEENSDALE.bounds[1][0],
+  -QUEENSDALE.bounds[0][1],
+];
+const RESOLUTIONS = Array.from(
+  { length: TYRIA_MAX_ZOOM + 1 },
+  (_, zoom) => 2 ** (TYRIA_MAX_ZOOM - zoom),
+);
+
+const projection = new Projection({
+  code: "GW2:CONTINENT",
+  units: "pixels",
+  extent: TYRIA_EXTENT,
+});
+
+const tileGrid = new TileGrid({
+  extent: TYRIA_EXTENT,
+  origin: [0, 0],
+  resolutions: RESOLUTIONS,
+  tileSize: 256,
+});
+
+function toMapCoordinate(point: ContinentPoint): [number, number] {
+  return [point[0], -point[1]];
+}
+
+function queensdaleTileUrl(tileCoordinate: number[] | null | undefined) {
+  if (!tileCoordinate) return undefined;
+  const [zoom, x, y] = tileCoordinate;
+  const allowed = continentBoundsToTileRange(QUEENSDALE.bounds, zoom);
+  if (
+    x < allowed.minX ||
+    x > allowed.maxX ||
+    y < allowed.minY ||
+    y > allowed.maxY
+  ) {
+    return undefined;
+  }
+  return `https://tiles.guildwars2.com/1/1/${zoom}/${x}/${y}.jpg`;
+}
+
+function updateHeartElement(
+  element: HTMLButtonElement,
+  complete: boolean,
+  suggested: boolean,
+) {
+  element.className = `map-heart ${complete ? "is-complete" : ""} ${suggested ? "is-suggested" : ""}`;
+  element.textContent = complete ? "♥" : "♡";
 }
 
 export function MapCanvas({
@@ -32,38 +92,53 @@ export function MapCanvas({
   onToggle,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const heartMarkersRef = useRef(new Map<number, L.Marker>());
-  const playerMarkerRef = useRef<L.Marker | null>(null);
+  const mapRef = useRef<Map | null>(null);
+  const heartOverlaysRef = useRef(new globalThis.Map<number, HeartOverlay>());
+  const playerOverlayRef = useRef<Overlay | null>(null);
+  const playerElementRef = useRef<HTMLDivElement | null>(null);
+  const [following, setFollowing] = useState(false);
+  const [headingUp, setHeadingUp] = useState(false);
+  const playerAvailable = player.connected && player.position !== null;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const bounds = L.latLngBounds(
-      continentToLeaflet(QUEENSDALE.bounds[0]),
-      continentToLeaflet(QUEENSDALE.bounds[1]),
-    );
-    const map = L.map(containerRef.current, {
-      crs: L.CRS.Simple,
-      minZoom: 4,
-      maxZoom: 7,
-      zoomControl: false,
-      attributionControl: true,
-      maxBounds: bounds.pad(0.2),
+
+    const tileSource = new XYZ({
+      projection,
+      tileGrid,
+      tileUrlFunction: queensdaleTileUrl,
+      wrapX: false,
+      transition: 180,
+      attributions: "Map tiles © ArenaNet",
     });
-    L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer("https://tiles.guildwars2.com/1/1/{z}/{x}/{y}.jpg", {
-      minZoom: 4,
-      maxZoom: 7,
-      bounds,
-      noWrap: true,
-      keepBuffer: 1,
-      updateWhenIdle: true,
-      attribution: "Map tiles © ArenaNet",
-    }).addTo(map);
-    map.fitBounds(bounds);
+    const map = new Map({
+      target: containerRef.current,
+      controls: defaultControls({ rotate: false }),
+      layers: [new TileLayer({ source: tileSource, preload: 0 })],
+      view: new View({
+        projection,
+        center: toMapCoordinate(QUEENSDALE.center),
+        extent: QUEENSDALE_EXTENT,
+        resolutions: RESOLUTIONS,
+        zoom: 4,
+        minZoom: 4,
+        maxZoom: TYRIA_MAX_ZOOM,
+        constrainResolution: true,
+      }),
+    });
+    map.getView().fit(QUEENSDALE_EXTENT, {
+      padding: [28, 28, 108, 28],
+      nearest: true,
+    });
+    map.on("pointerdrag", () => {
+      setFollowing(false);
+      setHeadingUp(false);
+      map.getView().setRotation(0);
+    });
     mapRef.current = map;
+
     return () => {
-      map.remove();
+      map.setTarget(undefined);
       mapRef.current = null;
     };
   }, []);
@@ -72,27 +147,40 @@ export function MapCanvas({
     const map = mapRef.current;
     if (!map) return;
     const activeIds = new Set(hearts.map((heart) => heart.id));
-    for (const [id, marker] of heartMarkersRef.current) {
+
+    for (const [id, heartOverlay] of heartOverlaysRef.current) {
       if (!activeIds.has(id)) {
-        marker.remove();
-        heartMarkersRef.current.delete(id);
+        map.removeOverlay(heartOverlay.overlay);
+        heartOverlaysRef.current.delete(id);
       }
     }
+
     for (const heart of hearts) {
-      let marker = heartMarkersRef.current.get(heart.id);
-      if (!marker) {
-        marker = L.marker(continentToLeaflet(heart.coordinate))
-          .addTo(map)
-          .bindTooltip(`<strong>Level ${heart.level}</strong><br>${heart.name}`, {
-            direction: "top",
-          });
-        marker.on("click", (event) => {
-          const element = event.originalEvent?.target as HTMLElement | undefined;
-          if (element) onToggle(heart, element);
+      let heartOverlay = heartOverlaysRef.current.get(heart.id);
+      if (!heartOverlay) {
+        const shell = document.createElement("div");
+        shell.className = "map-icon-shell";
+        const element = document.createElement("button");
+        element.type = "button";
+        element.title = `Level ${heart.level} · ${heart.name}`;
+        element.ariaLabel = `${heart.name}, level ${heart.level}`;
+        element.addEventListener("click", () => onToggle(heart, element));
+        shell.append(element);
+        const overlay = new Overlay({
+          element: shell,
+          positioning: "center-center",
+          position: toMapCoordinate(heart.coordinate),
+          stopEvent: true,
         });
-        heartMarkersRef.current.set(heart.id, marker);
+        map.addOverlay(overlay);
+        heartOverlay = { element, overlay };
+        heartOverlaysRef.current.set(heart.id, heartOverlay);
       }
-      marker.setIcon(heartIcon(completed.has(heart.id), suggestedId === heart.id));
+      updateHeartElement(
+        heartOverlay.element,
+        completed.has(heart.id),
+        suggestedId === heart.id,
+      );
     }
   }, [completed, hearts, onToggle, suggestedId]);
 
@@ -100,10 +188,7 @@ export function MapCanvas({
     () =>
       appEvents.on("heart:completed", ({ heartId }) => {
         window.setTimeout(() => {
-          const element = heartMarkersRef.current
-            .get(heartId)
-            ?.getElement()
-            ?.querySelector<HTMLElement>(".map-heart");
+          const element = heartOverlaysRef.current.get(heartId)?.element;
           if (!element) return;
           element.classList.remove("heart-bounce");
           void element.offsetWidth;
@@ -117,28 +202,109 @@ export function MapCanvas({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !player.position) return;
-    const location = continentToLeaflet(player.position);
-    if (!playerMarkerRef.current) {
-      playerMarkerRef.current = L.marker(location, {
-        zIndexOffset: 1000,
-        icon: L.divIcon({
-          className: "map-icon-shell",
-          html: '<div class="player-marker"><span></span></div>',
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
-        }),
-      }).addTo(map);
-    } else playerMarkerRef.current.setLatLng(location);
-    const element = playerMarkerRef.current.getElement()?.querySelector<HTMLElement>(".player-marker");
-    if (element) element.style.setProperty("--heading", `${player.heading ?? 0}rad`);
-  }, [player]);
+    const location = toMapCoordinate(player.position);
+
+    if (!playerOverlayRef.current) {
+      const shell = document.createElement("div");
+      shell.className = "map-icon-shell";
+      const element = document.createElement("div");
+      element.className = "player-marker";
+      element.innerHTML = "<span></span>";
+      shell.append(element);
+      playerElementRef.current = element;
+      playerOverlayRef.current = new Overlay({
+        element: shell,
+        position: location,
+        positioning: "center-center",
+        stopEvent: false,
+      });
+      map.addOverlay(playerOverlayRef.current);
+    } else {
+      playerOverlayRef.current.setPosition(location);
+    }
+
+    if (following) map.getView().setCenter(location);
+    if (headingUp) map.getView().setRotation(-(player.heading ?? 0));
+    playerElementRef.current?.style.setProperty(
+      "--heading",
+      `${headingUp ? 0 : (player.heading ?? 0)}rad`,
+    );
+  }, [following, headingUp, player]);
 
   useEffect(() => {
-    if (focusedHeart) {
-      mapRef.current?.flyTo(continentToLeaflet(focusedHeart.coordinate), 7, { duration: 0.6 });
-      heartMarkersRef.current.get(focusedHeart.id)?.openTooltip();
-    }
+    if (!focusedHeart) return;
+    const map = mapRef.current;
+    if (!map) return;
+    setFollowing(false);
+    setHeadingUp(false);
+    map.getView().animate({
+      center: toMapCoordinate(focusedHeart.coordinate),
+      rotation: 0,
+      zoom: TYRIA_MAX_ZOOM,
+      duration: 550,
+    });
   }, [focusedHeart]);
 
-  return <div className="map-canvas" ref={containerRef} aria-label="Interactive map of Queensdale" />;
+  const toggleFollowing = useCallback(() => {
+    if (!player.position) return;
+    const next = !following;
+    setFollowing(next);
+    if (!next) {
+      setHeadingUp(false);
+      mapRef.current?.getView().animate({ rotation: 0, duration: 250 });
+      return;
+    }
+    mapRef.current?.getView().animate({
+      center: toMapCoordinate(player.position),
+      duration: 300,
+    });
+  }, [following, player.position]);
+
+  const toggleHeadingUp = useCallback(() => {
+    if (!player.position) return;
+    const next = !headingUp;
+    setHeadingUp(next);
+    if (next) {
+      setFollowing(true);
+      mapRef.current?.getView().animate({
+        center: toMapCoordinate(player.position),
+        rotation: -(player.heading ?? 0),
+        duration: 300,
+      });
+    } else {
+      mapRef.current?.getView().animate({ rotation: 0, duration: 300 });
+    }
+  }, [headingUp, player.heading, player.position]);
+
+  return (
+    <>
+      <div
+        className="map-canvas"
+        ref={containerRef}
+        aria-label="Interactive map of Queensdale"
+      />
+      <div className="player-controls" aria-label="Player tracking controls">
+        <button
+          className={following ? "is-active" : ""}
+          disabled={!playerAvailable}
+          onClick={toggleFollowing}
+          aria-pressed={following}
+          title={following ? "Stop following player" : "Focus and follow player"}
+        >
+          <span aria-hidden="true">⌖</span>
+          <small>{following ? "Following" : "Follow"}</small>
+        </button>
+        <button
+          className={headingUp ? "is-active" : ""}
+          disabled={!playerAvailable}
+          onClick={toggleHeadingUp}
+          aria-pressed={headingUp}
+          title={headingUp ? "Keep north up" : "Keep player direction up"}
+        >
+          <span className="heading-icon" aria-hidden="true">↑</span>
+          <small>{headingUp ? "Heading up" : "North up"}</small>
+        </button>
+      </div>
+    </>
+  );
 }

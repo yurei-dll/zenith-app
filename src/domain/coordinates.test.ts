@@ -1,17 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   continentBoundsToTileRange,
-  continentToLeaflet,
   eventToContinent,
   mumbleMetersToMapInches,
 } from "./coordinates";
 import { QUEENSDALE } from "../data/queensdale";
 
 describe("coordinate transforms", () => {
-  it("scales continent coordinates so Leaflet zoom 7 is one pixel per unit", () => {
-    expect(continentToLeaflet([128, 256])).toEqual([-2, 1]);
-  });
-
   it("limits Queensdale to a small, predictable tile range", () => {
     expect(continentBoundsToTileRange(QUEENSDALE.bounds, 4)).toEqual({
       minX: 20,

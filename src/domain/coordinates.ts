@@ -1,14 +1,6 @@
 import type { ContinentPoint } from "./types";
 
 export const TYRIA_MAX_ZOOM = 7;
-export const LEAFLET_WORLD_SCALE = 2 ** TYRIA_MAX_ZOOM;
-
-export function continentToLeaflet(point: ContinentPoint): [number, number] {
-  return [
-    -point[1] / LEAFLET_WORLD_SCALE,
-    point[0] / LEAFLET_WORLD_SCALE,
-  ];
-}
 
 export interface TileRange {
   minX: number;
