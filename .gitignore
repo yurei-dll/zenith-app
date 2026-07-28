@@ -39,6 +39,7 @@ build/Release
 
 # Dependency directories
 node_modules/
+node_modules
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -82,6 +83,11 @@ out
 .nuxt
 dist
 .output
+
+# Local editor and OS state
+.DS_Store
+.idea/
+.vscode/
 
 # Gatsby files
 .cache/
