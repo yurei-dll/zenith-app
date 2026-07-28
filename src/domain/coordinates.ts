@@ -2,6 +2,10 @@ import type { ContinentPoint } from "./types";
 
 export const TYRIA_MAX_ZOOM = 7;
 
+export function mumbleHeadingToScreenRadians(heading: number): number {
+  return Math.PI - heading;
+}
+
 export interface TileRange {
   minX: number;
   maxX: number;

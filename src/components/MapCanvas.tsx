@@ -9,6 +9,7 @@ import TileGrid from "ol/tilegrid/TileGrid";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   continentBoundsToTileRange,
+  mumbleHeadingToScreenRadians,
   TYRIA_MAX_ZOOM,
 } from "../domain/coordinates";
 import { appEvents } from "../domain/events";
@@ -276,7 +277,7 @@ export function MapCanvas({
     if (following) map.getView().setCenter(location);
     playerElementRef.current?.style.setProperty(
       "--heading",
-      `${player.heading ?? 0}rad`,
+      `${mumbleHeadingToScreenRadians(player.heading ?? 0)}rad`,
     );
   }, [following, player]);
 

@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   continentBoundsToTileRange,
   eventToContinent,
+  mumbleHeadingToScreenRadians,
   mumbleMetersToMapInches,
 } from "./coordinates";
 import { QUEENSDALE } from "../data/queensdale";
 
 describe("coordinate transforms", () => {
+  it("flips world heading and accounts for the marker artwork's opposite zero", () => {
+    expect(mumbleHeadingToScreenRadians(0)).toBe(Math.PI);
+    expect(mumbleHeadingToScreenRadians(Math.PI / 2)).toBe(Math.PI / 2);
+    expect(mumbleHeadingToScreenRadians(-Math.PI / 2)).toBe(3 * Math.PI / 2);
+  });
+
   it("limits Queensdale to a small, predictable tile range", () => {
     expect(continentBoundsToTileRange(QUEENSDALE.bounds, 4)).toEqual({
       minX: 20,
