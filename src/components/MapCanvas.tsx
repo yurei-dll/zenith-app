@@ -52,9 +52,12 @@ export function MapCanvas({
     });
     L.control.zoom({ position: "bottomright" }).addTo(map);
     L.tileLayer("https://tiles.guildwars2.com/1/1/{z}/{x}/{y}.jpg", {
-      minZoom: 0,
+      minZoom: 4,
       maxZoom: 7,
       bounds,
+      noWrap: true,
+      keepBuffer: 1,
+      updateWhenIdle: true,
       attribution: "Map tiles © ArenaNet",
     }).addTo(map);
     map.fitBounds(bounds);

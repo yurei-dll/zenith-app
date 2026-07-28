@@ -1,9 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { continentToLeaflet, eventToContinent, mumbleMetersToMapInches } from "./coordinates";
+import {
+  continentBoundsToTileRange,
+  continentToLeaflet,
+  eventToContinent,
+  mumbleMetersToMapInches,
+} from "./coordinates";
+import { QUEENSDALE } from "../data/queensdale";
 
 describe("coordinate transforms", () => {
-  it("uses Leaflet's north-up Simple CRS convention", () => {
-    expect(continentToLeaflet([100, 200])).toEqual([-200, 100]);
+  it("scales continent coordinates so Leaflet zoom 7 is one pixel per unit", () => {
+    expect(continentToLeaflet([128, 256])).toEqual([-2, 1]);
+  });
+
+  it("limits Queensdale to a small, predictable tile range", () => {
+    expect(continentBoundsToTileRange(QUEENSDALE.bounds, 4)).toEqual({
+      minX: 20,
+      maxX: 22,
+      minY: 13,
+      maxY: 14,
+      count: 6,
+    });
+    expect(continentBoundsToTileRange(QUEENSDALE.bounds, 7)).toEqual({
+      minX: 166,
+      maxX: 180,
+      minY: 109,
+      maxY: 118,
+      count: 150,
+    });
+  });
+
+  it("rejects zoom levels outside the tile service contract", () => {
+    expect(() => continentBoundsToTileRange(QUEENSDALE.bounds, 8)).toThrow(RangeError);
   });
 
   it("converts Mumble meters to the game's event-coordinate inches", () => {

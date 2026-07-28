@@ -60,6 +60,11 @@ must first become game/event-coordinate inches before applying a map's
 `map_rect` → `continent_rect` transform. Recent GW2 Mumble context also exposes
 continent `playerX`/`playerY`, which the native adapter can prefer when valid.
 
+The map uses each zone's `continent_rect` as both its movement boundary and tile
+layer boundary. World wrapping is disabled and Leaflet keeps only a one-tile
+offscreen buffer. At zoom 4 Queensdale intersects 6 tiles; even at maximum zoom
+it intersects only 150, while the browser requests just the visible subset.
+
 ## Data and attribution
 
 Queensdale metadata is a small checked-in fixture sourced from the unauthenticated
