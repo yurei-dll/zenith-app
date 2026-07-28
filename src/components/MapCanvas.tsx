@@ -51,8 +51,13 @@ function updateHeartElement(
   element.textContent = complete ? "♥" : "♡";
 }
 
-function updatePoiElement(element: HTMLButtonElement, complete: boolean) {
-  element.className = `map-poi ${complete ? "is-complete" : ""}`;
+function updatePoiElement(
+  element: HTMLButtonElement,
+  kind: PointOfInterest["kind"],
+  complete: boolean,
+) {
+  element.className =
+    `map-poi map-poi--${kind} ${complete ? "is-complete" : ""}`;
 }
 
 export function MapCanvas({
@@ -79,6 +84,8 @@ export function MapCanvas({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    const heartOverlays = heartOverlaysRef.current;
+    const poiOverlays = poiOverlaysRef.current;
     const continentExtent = [
       0,
       -zone.continentDimensions[1],
@@ -158,6 +165,10 @@ export function MapCanvas({
 
     return () => {
       map.setTarget(undefined);
+      heartOverlays.clear();
+      poiOverlays.clear();
+      playerOverlayRef.current = null;
+      playerElementRef.current = null;
       mapRef.current = null;
     };
   }, [zone]);
@@ -222,8 +233,15 @@ export function MapCanvas({
         shell.className = "map-icon-shell";
         const element = document.createElement("button");
         element.type = "button";
-        element.title = `${poi.name} · Point of interest`;
-        element.ariaLabel = `${poi.name}, point of interest`;
+        const kindLabel =
+          poi.kind === "landmark"
+            ? "Point of interest"
+            : poi.kind === "waypoint"
+              ? "Waypoint"
+              : "Vista";
+        element.title = `${poi.name} · ${kindLabel}`;
+        element.ariaLabel = `${poi.name}, ${kindLabel.toLowerCase()}`;
+        element.innerHTML = "<span aria-hidden=\"true\"></span>";
         element.addEventListener("click", () => onTogglePoi(poi, element));
         shell.append(element);
         const overlay = new Overlay({
@@ -236,7 +254,7 @@ export function MapCanvas({
         poiOverlay = { element, overlay };
         poiOverlaysRef.current.set(poi.id, poiOverlay);
       }
-      updatePoiElement(poiOverlay.element, completedPois.has(poi.id));
+      updatePoiElement(poiOverlay.element, poi.kind, completedPois.has(poi.id));
     }
   }, [completedPois, onTogglePoi, pois]);
 
@@ -262,7 +280,7 @@ export function MapCanvas({
 
     if (!playerOverlayRef.current) {
       const shell = document.createElement("div");
-      shell.className = "map-icon-shell";
+      shell.className = "map-icon-shell player-icon-shell";
       const element = document.createElement("div");
       element.className = "player-marker";
       element.innerHTML = "<span></span>";
@@ -284,7 +302,7 @@ export function MapCanvas({
       "--heading",
       `${mumbleHeadingToScreenRadians(player.heading ?? 0)}rad`,
     );
-  }, [following, player, zone.id]);
+  }, [following, player, zone]);
 
   useEffect(() => {
     if (!focusedHeart) return;
@@ -309,6 +327,8 @@ export function MapCanvas({
     });
   }, [following, player.mapId, player.position, zone.id]);
 
+  const objectiveKinds = ["landmark", "waypoint", "vista"] as const;
+
   return (
     <>
       <div
@@ -329,11 +349,26 @@ export function MapCanvas({
         </button>
       </div>
       <div className="map-legend" aria-label="Map objective legend">
-        <span className="legend-poi" aria-hidden="true" />
-        <span>
-          <strong>{completedPois.size} / {pois.length}</strong>
-          points of interest
-        </span>
+        {objectiveKinds.map((kind) => {
+          const objectives = pois.filter((poi) => poi.kind === kind);
+          const completed = objectives.filter((poi) =>
+            completedPois.has(poi.id),
+          ).length;
+          return (
+            <span className="legend-item" key={kind}>
+              <i
+                className={`legend-marker legend-marker--${kind}`}
+                aria-hidden="true"
+              >
+                <b />
+              </i>
+              <span>
+                <strong>{completed} / {objectives.length}</strong>
+                {kind === "landmark" ? "points of interest" : `${kind}s`}
+              </span>
+            </span>
+          );
+        })}
       </div>
     </>
   );

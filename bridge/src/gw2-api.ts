@@ -74,6 +74,7 @@ export interface NormalizedMap {
   pointsOfInterest: Array<{
     id: number;
     name: string;
+    kind: "landmark" | "waypoint" | "vista";
     coordinate: [number, number];
   }>;
 }
@@ -149,12 +150,25 @@ export class Gw2ApiClient {
         .sort((a, b) => a.level - b.level || a.id - b.id),
       pointsOfInterest: Object.values(pointsOfInterest)
         .filter(
-          (point): point is ApiPointOfInterest & { name: string } =>
-            point.type === "landmark" && typeof point.name === "string",
+          (
+            point,
+          ): point is ApiPointOfInterest & {
+            type: "landmark" | "waypoint" | "vista";
+          } =>
+            point.type === "landmark" ||
+            point.type === "waypoint" ||
+            point.type === "vista",
         )
         .map((point) => ({
           id: point.id,
-          name: point.name,
+          name:
+            point.name ??
+            (point.type === "vista"
+              ? "Vista"
+              : point.type === "waypoint"
+                ? "Waypoint"
+                : "Point of interest"),
+          kind: point.type,
           coordinate: point.coord,
         }))
         .sort((a, b) => a.id - b.id),

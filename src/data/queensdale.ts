@@ -30,7 +30,7 @@ export const QUEENSDALE_HEARTS: Heart[] = [
   { id: 228, name: "Assist Fisherman Will and the fishermen of Beetletun.", level: 10, coordinate: [45600.2, 28218.9] },
 ];
 
-export const QUEENSDALE_POIS: PointOfInterest[] = [
+const QUEENSDALE_LANDMARKS: Array<Omit<PointOfInterest, "kind">> = [
   { id: 127, name: "Eda's Orchard", coordinate: [42830.7, 28406.7] },
   { id: 128, name: "Mepi's Moa Ranch", coordinate: [42845.6, 28728.5] },
   { id: 129, name: "Jeb's Wheatfield", coordinate: [43185.6, 28652.4] },
@@ -53,6 +53,10 @@ export const QUEENSDALE_POIS: PointOfInterest[] = [
   { id: 1675, name: "Bar Curtis Ranch", coordinate: [43215.5, 29722.4] },
   { id: 1676, name: "Duran Brothers' Docks", coordinate: [43110.4, 30146.3] },
 ];
+
+export const QUEENSDALE_POIS: PointOfInterest[] = QUEENSDALE_LANDMARKS.map(
+  (point) => ({ ...point, kind: "landmark" }),
+);
 
 export const QUEENSDALE_MAP: ZoneMap = {
   id: QUEENSDALE.id,

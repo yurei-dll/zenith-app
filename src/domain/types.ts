@@ -22,6 +22,7 @@ export interface Heart {
 export interface PointOfInterest {
   id: number;
   name: string;
+  kind: "landmark" | "waypoint" | "vista";
   coordinate: ContinentPoint;
 }
 
