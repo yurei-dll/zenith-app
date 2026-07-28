@@ -1,84 +1,95 @@
-import { WebSocketServer } from "ws";
-import type { WebSocket } from "ws";
-
-interface PlayerSnapshot {
-  type: "player";
-  sequence: number;
-  connected: boolean;
-  mapId: number;
-  position: readonly [number, number];
-  heading: number;
-  characterName: string;
-  timestamp: string;
-  source: "mock";
-}
+import { createServer } from "node:http";
+import { WebSocketServer, type WebSocket } from "ws";
+import { Gw2ApiClient } from "./gw2-api.js";
+import { createHttpHandler } from "./http.js";
+import { createMockSource } from "./mock.js";
+import { createMumbleLinkSource } from "./mumblelink.js";
+import type { PlayerSnapshot, TelemetrySource } from "./types.js";
 
 const HOST = "127.0.0.1";
-const PORT = 38421;
-const MOCK_ROUTE = [
-  [43728.4, 28589.9],
-  [43244.7, 28723.5],
-  [42822.6, 28780],
-  [44087.8, 29386.4],
-  [43550.7, 30028],
-  [44063.9, 29886.6],
-] as const;
-
-function interpolateRoute(elapsedSeconds: number) {
-  const legDuration = 8;
-  const leg = Math.floor(elapsedSeconds / legDuration) % MOCK_ROUTE.length;
-  const nextLeg = (leg + 1) % MOCK_ROUTE.length;
-  const progress = (elapsedSeconds % legDuration) / legDuration;
-  const from = MOCK_ROUTE[leg];
-  const to = MOCK_ROUTE[nextLeg];
-  const x = from[0] + (to[0] - from[0]) * progress;
-  const y = from[1] + (to[1] - from[1]) * progress;
-  return { position: [x, y] as const, heading: Math.atan2(to[0] - from[0], -(to[1] - from[1])) };
-}
-
-const server = new WebSocketServer({ host: HOST, port: PORT });
+const PORT = Number(process.env.ZENITH_BACKEND_PORT ?? 38421);
+const LOCAL_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost):\d+$/;
 const startedAt = Date.now();
 let sequence = 0;
 
-function broadcast(socket?: WebSocket) {
-  const elapsedSeconds = (Date.now() - startedAt) / 1000;
-  const route = interpolateRoute(elapsedSeconds);
-  const message: PlayerSnapshot = {
-    type: "player",
-    sequence: sequence++,
-    connected: true,
-    mapId: 15,
-    position: route.position,
-    heading: route.heading,
-    characterName: "Demo Wayfinder",
-    timestamp: new Date().toISOString(),
-    source: "mock",
-  };
-  const payload = JSON.stringify(message);
-  if (socket) socket.send(payload);
-  else {
-    for (const client of server.clients) {
-      if (client.readyState === client.OPEN) client.send(payload);
-    }
-  }
+if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) {
+  throw new RangeError("ZENITH_BACKEND_PORT must be an integer from 1024 to 65535");
 }
 
-server.on("connection", (socket, request) => {
-  if (request.headers.origin && !/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(request.headers.origin)) {
-    socket.close(1008, "Local origins only");
+function requestedMode() {
+  if (process.argv.includes("--mock")) return "mock";
+  if (process.argv.includes("--mumble")) return "mumblelink";
+  return process.platform === "win32" ? "mumblelink" : "mock";
+}
+
+async function createSource(): Promise<TelemetrySource> {
+  const mode = requestedMode();
+  if (mode === "mock") return createMockSource();
+  return createMumbleLinkSource();
+}
+
+const source = await createSource();
+let currentPlayer: PlayerSnapshot = {
+  type: "player",
+  sequence: sequence++,
+  connected: false,
+  mapId: null,
+  position: null,
+  heading: null,
+  characterName: null,
+  timestamp: new Date().toISOString(),
+  source: source.kind,
+};
+
+const api = new Gw2ApiClient();
+const server = createServer(
+  createHttpHandler(api, () => currentPlayer, startedAt),
+);
+const sockets = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (request, socket, head) => {
+  const origin = request.headers.origin;
+  if (request.url !== "/" || (origin && !LOCAL_ORIGIN.test(origin))) {
+    socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+    socket.destroy();
     return;
   }
-  broadcast(socket);
+  sockets.handleUpgrade(request, socket, head, (client) => {
+    sockets.emit("connection", client, request);
+  });
 });
 
-const timer = setInterval(() => broadcast(), 100);
+function sendPlayer(socket: WebSocket) {
+  if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(currentPlayer));
+}
+
+sockets.on("connection", (socket) => sendPlayer(socket));
+
+const timer = setInterval(() => {
+  currentPlayer = {
+    type: "player",
+    sequence: sequence++,
+    ...source.read(),
+    timestamp: new Date().toISOString(),
+    source: source.kind,
+  };
+  for (const socket of sockets.clients) sendPlayer(socket);
+}, 100);
+
+server.listen(PORT, HOST, () => {
+  console.log(
+    `Zenith backend listening on http://${HOST}:${PORT} ` +
+      `(telemetry: ${source.kind})`,
+  );
+});
 
 function shutdown() {
   clearInterval(timer);
+  source.close();
+  for (const socket of sockets.clients) socket.close(1001, "Backend shutting down");
+  sockets.close();
   server.close(() => process.exit(0));
 }
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-console.log(`Zenith bridge demo listening on ws://${HOST}:${PORT}`);

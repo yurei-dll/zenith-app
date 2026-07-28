@@ -14,9 +14,10 @@ player choose and track objectives without automating game input.
 - reduced-motion behavior;
 - responsive desktop and compact layouts.
 
-The current bridge uses a simulator so the complete browser experience works on
-any development machine. Its normalized contract is ready for a native Windows
-MumbleLink adapter.
+The local backend uses native read-only MumbleLink telemetry on Windows and a
+simulator elsewhere, so the complete browser experience remains available on
+any development machine. It also provides cached, allowlisted access to public
+Guild Wars 2 map data.
 
 ## Run it
 
@@ -28,7 +29,8 @@ npm run dev
 ```
 
 Open <http://127.0.0.1:5173>. `npm run dev` starts both the Vite app and the
-loopback-only demo bridge at `ws://127.0.0.1:38421`.
+loopback-only backend at `http://127.0.0.1:38421`; player snapshots use its
+root WebSocket endpoint.
 
 ```bash
 npm test
@@ -39,12 +41,12 @@ npm run build
 ## Architecture
 
 ```text
-GW2 MumbleLink shared memory
-          │ read-only
-          ▼
-local bridge / snapshot adapter ── ws://127.0.0.1:38421
-                                      │ normalized PlayerSnapshot
-                                      ▼
+GW2 MumbleLink shared memory ── read-only ──┐
+                                             ▼
+ArenaNet public API ── cache/allowlist ── local backend :38421
+                                             │
+                         normalized WebSocket│and HTTP API
+                                             ▼
 React state ── OpenLayers map ── completion store (localStorage)
                    │
                    └── explicit domain events ── celebration effects
