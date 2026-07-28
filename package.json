@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "concurrently -k -n bridge,web -c yellow,cyan \"npm:dev:bridge\" \"npm:dev:web\"",
     "dev:web": "vite",
-    "dev:bridge": "tsx watch bridge/src/index.ts --mock",
+    "dev:bridge": "tsx watch bridge/src/index.ts",
+    "bridge:mock": "tsx bridge/src/index.ts --mock",
+    "bridge:mumble": "tsx bridge/src/index.ts --mumble",
     "build": "tsc -b && vite build",
     "check": "tsc -b && eslint .",
     "test": "vitest run"
   },
   "dependencies": {
+    "koffi": "^3.1.2",
     "ol": "^10.10.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
