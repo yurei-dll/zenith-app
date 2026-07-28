@@ -54,6 +54,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--gold-bright); o
 .zone-heading .eyebrow { color: var(--gold); font-size: 10px; font-weight: 700; letter-spacing: .22em; }
 .zone-heading h1 { font: 38px/1.05 Marcellus, serif; margin: 8px 0 7px; color: #f5ecdc; letter-spacing: .01em; }
 .zone-heading p { color: #8da197; font: 13px/1.5 Marcellus, serif; margin: 0; }
+.map-data-status { color: #9bb8aa; display: block; font-size: 10px; margin-top: 9px; }
+.map-data-status.is-error { color: #d89b86; }
 .progress-card { padding: 20px 0 18px; margin-top: 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .progress-card > div:first-child { display: flex; justify-content: space-between; align-items: baseline; }
 .progress-card span { font-size: 10px; letter-spacing: .19em; color: #87998f; }

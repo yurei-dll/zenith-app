@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Gw2ApiClient, MAPS } from "./gw2-api.js";
+import { Gw2ApiClient } from "./gw2-api.js";
 import type { PlayerSnapshot } from "./types.js";
 
 const LOCAL_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost):\d+$/;
@@ -64,17 +64,13 @@ export function createHttpHandler(
         return;
       }
       if (url.pathname === "/api/maps") {
-        sendJson(response, 200, { ids: [...MAPS.keys()] });
+        sendJson(response, 200, { ids: api.status().loadedMaps });
         return;
       }
 
       const match = /^\/api\/maps\/(\d+)$/.exec(url.pathname);
       if (match) {
         const mapId = Number(match[1]);
-        if (!MAPS.has(mapId)) {
-          sendJson(response, 404, { error: `Map ${mapId} is not registered` });
-          return;
-        }
         const map = await api.getMap(mapId, url.searchParams.get("refresh") === "1");
         sendJson(response, 200, map);
         return;

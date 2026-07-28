@@ -10,7 +10,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   continentBoundsToTileRange,
   mumbleHeadingToScreenRadians,
-  TYRIA_MAX_ZOOM,
 } from "../domain/coordinates";
 import { appEvents } from "../domain/events";
 import type {
@@ -18,10 +17,11 @@ import type {
   Heart,
   PlayerSnapshot,
   PointOfInterest,
+  ZoneMap,
 } from "../domain/types";
-import { QUEENSDALE } from "../data/queensdale";
 
 interface MapCanvasProps {
+  zone: ZoneMap;
   hearts: Heart[];
   pois: PointOfInterest[];
   completedHearts: Set<number>;
@@ -38,49 +38,8 @@ interface ObjectiveOverlay {
   element: HTMLButtonElement;
 }
 
-const TYRIA_SIZE: ContinentPoint = [81920, 114688];
-const TYRIA_EXTENT = [0, -TYRIA_SIZE[1], TYRIA_SIZE[0], 0];
-const QUEENSDALE_EXTENT = [
-  QUEENSDALE.bounds[0][0],
-  -QUEENSDALE.bounds[1][1],
-  QUEENSDALE.bounds[1][0],
-  -QUEENSDALE.bounds[0][1],
-];
-const RESOLUTIONS = Array.from(
-  { length: TYRIA_MAX_ZOOM + 1 },
-  (_, zoom) => 2 ** (TYRIA_MAX_ZOOM - zoom),
-);
-
-const projection = new Projection({
-  code: "GW2:CONTINENT",
-  units: "pixels",
-  extent: TYRIA_EXTENT,
-});
-
-const tileGrid = new TileGrid({
-  extent: TYRIA_EXTENT,
-  origin: [0, 0],
-  resolutions: RESOLUTIONS,
-  tileSize: 256,
-});
-
 function toMapCoordinate(point: ContinentPoint): [number, number] {
   return [point[0], -point[1]];
-}
-
-function queensdaleTileUrl(tileCoordinate: number[] | null | undefined) {
-  if (!tileCoordinate) return undefined;
-  const [zoom, x, y] = tileCoordinate;
-  const allowed = continentBoundsToTileRange(QUEENSDALE.bounds, zoom);
-  if (
-    x < allowed.minX ||
-    x > allowed.maxX ||
-    y < allowed.minY ||
-    y > allowed.maxY
-  ) {
-    return undefined;
-  }
-  return `https://tiles.guildwars2.com/1/1/${zoom}/${x}/${y}.jpg`;
 }
 
 function updateHeartElement(
@@ -97,6 +56,7 @@ function updatePoiElement(element: HTMLButtonElement, complete: boolean) {
 }
 
 export function MapCanvas({
+  zone,
   hearts,
   pois,
   completedHearts,
@@ -114,15 +74,60 @@ export function MapCanvas({
   const playerOverlayRef = useRef<Overlay | null>(null);
   const playerElementRef = useRef<HTMLDivElement | null>(null);
   const [following, setFollowing] = useState(false);
-  const playerAvailable = player.connected && player.position !== null;
+  const playerAvailable =
+    player.connected && player.position !== null && player.mapId === zone.id;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    const continentExtent = [
+      0,
+      -zone.continentDimensions[1],
+      zone.continentDimensions[0],
+      0,
+    ];
+    const zoneExtent = [
+      zone.continentRect[0][0],
+      -zone.continentRect[1][1],
+      zone.continentRect[1][0],
+      -zone.continentRect[0][1],
+    ];
+    const resolutions = Array.from(
+      { length: zone.maxZoom + 1 },
+      (_, zoom) => 2 ** (zone.maxZoom - zoom),
+    );
+    const projection = new Projection({
+      code: `GW2:CONTINENT:${zone.continentId}`,
+      units: "pixels",
+      extent: continentExtent,
+    });
+    const tileGrid = new TileGrid({
+      extent: continentExtent,
+      origin: [0, 0],
+      resolutions,
+      tileSize: 256,
+    });
 
     const tileSource = new XYZ({
       projection,
       tileGrid,
-      tileUrlFunction: queensdaleTileUrl,
+      tileUrlFunction: (tileCoordinate) => {
+        if (!tileCoordinate) return undefined;
+        const [zoom, x, y] = tileCoordinate;
+        const allowed = continentBoundsToTileRange(
+          zone.continentRect,
+          zoom,
+          zone.maxZoom,
+        );
+        if (
+          x < allowed.minX ||
+          x > allowed.maxX ||
+          y < allowed.minY ||
+          y > allowed.maxY
+        ) {
+          return undefined;
+        }
+        return `https://tiles.guildwars2.com/${zone.continentId}/${zone.floorId}/${zoom}/${x}/${y}.jpg`;
+      },
       wrapX: false,
       transition: 180,
       attributions: "Map tiles © ArenaNet",
@@ -133,16 +138,16 @@ export function MapCanvas({
       layers: [new TileLayer({ source: tileSource, preload: 0 })],
       view: new View({
         projection,
-        center: toMapCoordinate(QUEENSDALE.center),
-        extent: QUEENSDALE_EXTENT,
-        resolutions: RESOLUTIONS,
-        zoom: 4,
-        minZoom: 4,
-        maxZoom: TYRIA_MAX_ZOOM,
+        center: toMapCoordinate(zone.center),
+        extent: zoneExtent,
+        resolutions,
+        zoom: zone.minZoom,
+        minZoom: zone.minZoom,
+        maxZoom: zone.maxZoom,
         constrainResolution: true,
       }),
     });
-    map.getView().fit(QUEENSDALE_EXTENT, {
+    map.getView().fit(zoneExtent, {
       padding: [28, 28, 108, 28],
       nearest: true,
     });
@@ -155,7 +160,7 @@ export function MapCanvas({
       map.setTarget(undefined);
       mapRef.current = null;
     };
-  }, []);
+  }, [zone]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -252,7 +257,7 @@ export function MapCanvas({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !player.position) return;
+    if (!map || !player.position || player.mapId !== zone.id) return;
     const location = toMapCoordinate(player.position);
 
     if (!playerOverlayRef.current) {
@@ -279,7 +284,7 @@ export function MapCanvas({
       "--heading",
       `${mumbleHeadingToScreenRadians(player.heading ?? 0)}rad`,
     );
-  }, [following, player]);
+  }, [following, player, zone.id]);
 
   useEffect(() => {
     if (!focusedHeart) return;
@@ -288,13 +293,13 @@ export function MapCanvas({
     setFollowing(false);
     map.getView().animate({
       center: toMapCoordinate(focusedHeart.coordinate),
-      zoom: TYRIA_MAX_ZOOM,
+      zoom: zone.maxZoom,
       duration: 550,
     });
-  }, [focusedHeart]);
+  }, [focusedHeart, zone.maxZoom]);
 
   const toggleFollowing = useCallback(() => {
-    if (!player.position) return;
+    if (!player.position || player.mapId !== zone.id) return;
     const next = !following;
     setFollowing(next);
     if (!next) return;
@@ -302,14 +307,14 @@ export function MapCanvas({
       center: toMapCoordinate(player.position),
       duration: 300,
     });
-  }, [following, player.position]);
+  }, [following, player.mapId, player.position, zone.id]);
 
   return (
     <>
       <div
         className="map-canvas"
         ref={containerRef}
-        aria-label="Interactive map of Queensdale"
+        aria-label={`Interactive map of ${zone.name}`}
       />
       <div className="player-controls" aria-label="Player tracking controls">
         <button

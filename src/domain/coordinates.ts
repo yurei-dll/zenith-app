@@ -17,12 +17,13 @@ export interface TileRange {
 export function continentBoundsToTileRange(
   bounds: readonly [ContinentPoint, ContinentPoint],
   zoom: number,
+  maxZoom = TYRIA_MAX_ZOOM,
 ): TileRange {
-  if (!Number.isInteger(zoom) || zoom < 0 || zoom > TYRIA_MAX_ZOOM) {
-    throw new RangeError(`Zoom must be an integer from 0 to ${TYRIA_MAX_ZOOM}`);
+  if (!Number.isInteger(zoom) || zoom < 0 || zoom > maxZoom) {
+    throw new RangeError(`Zoom must be an integer from 0 to ${maxZoom}`);
   }
 
-  const continentUnitsPerTile = 256 * 2 ** (TYRIA_MAX_ZOOM - zoom);
+  const continentUnitsPerTile = 256 * 2 ** (maxZoom - zoom);
   const minX = Math.floor(bounds[0][0] / continentUnitsPerTile);
   const maxX = Math.ceil(bounds[1][0] / continentUnitsPerTile) - 1;
   const minY = Math.floor(bounds[0][1] / continentUnitsPerTile);

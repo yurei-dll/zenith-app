@@ -2,21 +2,18 @@ import { useCallback, useMemo, useState } from "react";
 import { CompletionEffects } from "./components/CompletionEffects";
 import { HeartList } from "./components/HeartList";
 import { MapCanvas } from "./components/MapCanvas";
-import {
-  QUEENSDALE,
-  QUEENSDALE_HEARTS,
-  QUEENSDALE_POIS,
-} from "./data/queensdale";
 import { appEvents } from "./domain/events";
-import type { Heart, PointOfInterest } from "./domain/types";
+import type { Heart, PlayerSnapshot, PointOfInterest, ZoneMap } from "./domain/types";
 import { useCompletion } from "./hooks/useCompletion";
+import { useMapData } from "./hooks/useMapData";
 import { usePlayerSocket } from "./hooks/usePlayerSocket";
 
 function nearestIncompleteHeart(
+  hearts: Heart[],
   completed: Set<number>,
   position: readonly [number, number] | null,
 ) {
-  const remaining = QUEENSDALE_HEARTS.filter((heart) => !completed.has(heart.id));
+  const remaining = hearts.filter((heart) => !completed.has(heart.id));
   if (!remaining.length) return null;
   if (!position) return remaining.sort((a, b) => a.level - b.level)[0];
   return remaining.reduce((nearest, heart) => {
@@ -26,18 +23,24 @@ function nearestIncompleteHeart(
   });
 }
 
-export default function App() {
-  const player = usePlayerSocket();
+interface ZoneWorkspaceProps {
+  zone: ZoneMap;
+  player: PlayerSnapshot;
+  loading: boolean;
+  error: string | null;
+}
+
+function ZoneWorkspace({ zone, player, loading, error }: ZoneWorkspaceProps) {
   const {
     completedHearts,
     completedPois,
     toggleHeart: persistHeart,
     togglePoi: persistPoi,
-  } = useCompletion();
+  } = useCompletion(zone.id);
   const [focusedHeart, setFocusedHeart] = useState<Heart | null>(null);
   const suggested = useMemo(
-    () => nearestIncompleteHeart(completedHearts, player.position),
-    [completedHearts, player.position],
+    () => nearestIncompleteHeart(zone.hearts, completedHearts, player.position),
+    [completedHearts, player.position, zone.hearts],
   );
 
   const toggleHeart = useCallback(
@@ -64,41 +67,39 @@ export default function App() {
     [persistPoi],
   );
 
-  return (
-    <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="Zenith home">
-          <span className="brand-mark">Z</span>
-          <span><strong>ZENITH</strong><small>Map completion companion</small></span>
-        </a>
-        <div className={`bridge-status ${player.connected ? "is-connected" : ""}`}>
-          <i />
-          <span>{player.connected ? `${player.source === "mock" ? "Demo trail" : "MumbleLink"} connected` : "Waiting for local bridge"}</span>
-        </div>
-      </header>
+  const progress = zone.hearts.length
+    ? (completedHearts.size / zone.hearts.length) * 100
+    : 0;
 
-      <section className="workspace">
+  return (
+    <section className="workspace">
         <aside className="sidebar">
           <div className="zone-heading">
-            <span className="eyebrow">TYRIA · KRYTA</span>
-            <h1>{QUEENSDALE.name}</h1>
-            <p>A gentle path through every good deed.</p>
+            <span className="eyebrow">{zone.continentName} · {zone.regionName}</span>
+            <h1>{zone.name}</h1>
+            <p>
+              {zone.minLevel || zone.maxLevel
+                ? `Level ${zone.minLevel}–${zone.maxLevel} exploration`
+                : "Map exploration"}
+            </p>
+            {loading && <small className="map-data-status">Loading current map…</small>}
+            {error && <small className="map-data-status is-error">{error}</small>}
           </div>
           <div className="progress-card">
             <div>
               <span>HEARTS</span>
-              <strong>{completedHearts.size}<small> / {QUEENSDALE_HEARTS.length}</small></strong>
+              <strong>{completedHearts.size}<small> / {zone.hearts.length}</small></strong>
             </div>
             <div className="progress-track">
-              <i style={{ width: `${(completedHearts.size / QUEENSDALE_HEARTS.length) * 100}%` }} />
+              <i style={{ width: `${progress}%` }} />
             </div>
           </div>
           <div className="list-heading">
             <h2>Renown hearts</h2>
-            <span>{QUEENSDALE_HEARTS.length - completedHearts.size} remaining</span>
+            <span>{zone.hearts.length - completedHearts.size} remaining</span>
           </div>
           <HeartList
-            hearts={QUEENSDALE_HEARTS}
+            hearts={zone.hearts}
             completed={completedHearts}
             suggestedId={suggested?.id ?? null}
             onSelect={setFocusedHeart}
@@ -108,8 +109,9 @@ export default function App() {
 
         <section className="map-panel">
           <MapCanvas
-            hearts={QUEENSDALE_HEARTS}
-            pois={QUEENSDALE_POIS}
+            zone={zone}
+            hearts={zone.hearts}
+            pois={zone.pointsOfInterest}
             completedHearts={completedHearts}
             completedPois={completedPois}
             suggestedId={suggested?.id ?? null}
@@ -127,7 +129,33 @@ export default function App() {
             </button>
           )}
         </section>
-      </section>
+    </section>
+  );
+}
+
+export default function App() {
+  const player = usePlayerSocket();
+  const { map, loading, error } = useMapData(player.mapId);
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="/" aria-label="Zenith home">
+          <span className="brand-mark">Z</span>
+          <span><strong>ZENITH</strong><small>Map completion companion</small></span>
+        </a>
+        <div className={`bridge-status ${player.connected ? "is-connected" : ""}`}>
+          <i />
+          <span>{player.connected ? `${player.source === "mock" ? "Demo trail" : "MumbleLink"} connected` : "Waiting for local bridge"}</span>
+        </div>
+      </header>
+      <ZoneWorkspace
+        key={map.id}
+        zone={map}
+        player={player}
+        loading={loading}
+        error={error}
+      />
       <CompletionEffects />
     </main>
   );

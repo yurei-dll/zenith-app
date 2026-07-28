@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CompletionState } from "../domain/types";
 
-const STORAGE_KEY = "zenith:completion:v1:map:15";
+const storageKey = (mapId: number) => `zenith:completion:v1:map:${mapId}`;
 
-function loadCompletion(): {
+function loadCompletion(mapId: number): {
   hearts: Set<number>;
   pois: Set<number>;
 } {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey(mapId));
     if (!stored) return { hearts: new Set(), pois: new Set() };
     const parsed = JSON.parse(stored) as CompletionState;
     return {
@@ -29,8 +29,8 @@ function toggleId(setter: React.Dispatch<React.SetStateAction<Set<number>>>, id:
   });
 }
 
-export function useCompletion() {
-  const [initial] = useState(loadCompletion);
+export function useCompletion(mapId: number) {
+  const [initial] = useState(() => loadCompletion(mapId));
   const [completedHearts, setCompletedHearts] = useState(initial.hearts);
   const [completedPois, setCompletedPois] = useState(initial.pois);
 
@@ -40,8 +40,8 @@ export function useCompletion() {
       completedPoiIds: [...completedPois],
       updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [completedHearts, completedPois]);
+    localStorage.setItem(storageKey(mapId), JSON.stringify(state));
+  }, [completedHearts, completedPois, mapId]);
 
   const toggleHeart = useCallback(
     (heartId: number) => toggleId(setCompletedHearts, heartId),

@@ -1,4 +1,4 @@
-import type { ContinentPoint, Heart, PointOfInterest } from "../domain/types";
+import type { ContinentPoint, Heart, PointOfInterest, ZoneMap } from "../domain/types";
 
 export const QUEENSDALE = {
   id: 15,
@@ -53,3 +53,23 @@ export const QUEENSDALE_POIS: PointOfInterest[] = [
   { id: 1675, name: "Bar Curtis Ranch", coordinate: [43215.5, 29722.4] },
   { id: 1676, name: "Duran Brothers' Docks", coordinate: [43110.4, 30146.3] },
 ];
+
+export const QUEENSDALE_MAP: ZoneMap = {
+  id: QUEENSDALE.id,
+  name: QUEENSDALE.name,
+  minLevel: 1,
+  maxLevel: 15,
+  continentId: 1,
+  continentName: "Tyria",
+  floorId: 1,
+  regionId: 4,
+  regionName: "Kryta",
+  continentDimensions: [81920, 114688],
+  minZoom: 0,
+  maxZoom: 7,
+  mapRect: [[-43008, -27648], [43008, 30720]],
+  continentRect: QUEENSDALE.bounds,
+  center: QUEENSDALE.center,
+  hearts: QUEENSDALE_HEARTS,
+  pointsOfInterest: QUEENSDALE_POIS,
+};

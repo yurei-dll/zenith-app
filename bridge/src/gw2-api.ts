@@ -1,12 +1,6 @@
-import type { MapRegistration } from "./types.js";
-
 const API_ROOT = "https://api.guildwars2.com";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 8_000;
-
-export const MAPS = new Map<number, MapRegistration>([
-  [15, { id: 15, continentId: 1, floorId: 1, regionId: 4 }],
-]);
 
 interface CacheEntry {
   expiresAt: number;
@@ -27,15 +21,32 @@ interface ApiPointOfInterest {
   coord: [number, number];
 }
 
-interface ApiMap {
+interface ApiMapSummary {
   id: number;
   name: string;
   min_level: number;
   max_level: number;
+  default_floor: number;
+  region_id: number;
+  region_name: string;
+  continent_id: number;
+  continent_name: string;
   map_rect: [[number, number], [number, number]];
   continent_rect: [[number, number], [number, number]];
-  tasks: Record<string, ApiTask>;
-  points_of_interest: Record<string, ApiPointOfInterest>;
+}
+
+interface ApiContinent {
+  name: string;
+  continent_dims: [number, number];
+  min_zoom: number;
+  max_zoom: number;
+}
+
+interface ApiMapDetails {
+  id?: number;
+  label_coord?: [number, number];
+  tasks?: Record<string, ApiTask>;
+  points_of_interest?: Record<string, ApiPointOfInterest>;
 }
 
 export interface NormalizedMap {
@@ -43,8 +54,17 @@ export interface NormalizedMap {
   name: string;
   minLevel: number;
   maxLevel: number;
-  mapRect: ApiMap["map_rect"];
-  continentRect: ApiMap["continent_rect"];
+  continentId: number;
+  continentName: string;
+  floorId: number;
+  regionId: number;
+  regionName: string;
+  continentDimensions: [number, number];
+  minZoom: number;
+  maxZoom: number;
+  mapRect: ApiMapSummary["map_rect"];
+  continentRect: ApiMapSummary["continent_rect"];
+  center: [number, number];
   hearts: Array<{
     id: number;
     name: string;
@@ -61,32 +81,65 @@ export interface NormalizedMap {
 export class Gw2ApiClient {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly loadedMapIds = new Set<number>();
 
   async getMap(mapId: number, forceRefresh = false): Promise<NormalizedMap> {
-    const registration = MAPS.get(mapId);
-    if (!registration) throw new RangeError(`Map ${mapId} is not registered`);
-    const path =
-      `/v2/continents/${registration.continentId}` +
-      `/floors/${registration.floorId}` +
-      `/regions/${registration.regionId}` +
-      `/maps/${registration.id}?lang=en`;
-    const map = await this.getJson<ApiMap>(path, forceRefresh);
+    if (!Number.isSafeInteger(mapId) || mapId <= 0) {
+      throw new RangeError("Map ID must be a positive integer");
+    }
+    const map = await this.getJson<ApiMapSummary>(
+      `/v2/maps/${mapId}?lang=en`,
+      forceRefresh,
+    );
     if (
       map.id !== mapId ||
       typeof map.name !== "string" ||
-      typeof map.tasks !== "object"
+      !Number.isInteger(map.continent_id) ||
+      !Number.isInteger(map.default_floor) ||
+      !Number.isInteger(map.region_id)
     ) {
       throw new Error("Guild Wars 2 API returned an unexpected map payload");
     }
+    const continent = await this.getJson<ApiContinent>(
+      `/v2/continents/${map.continent_id}?lang=en`,
+      forceRefresh,
+    );
+    const detailsPath =
+      `/v2/continents/${map.continent_id}` +
+      `/floors/${map.default_floor}` +
+      `/regions/${map.region_id}` +
+      `/maps/${map.id}?lang=en`;
+    // Instances and a few special maps have valid /v2/maps metadata but are not
+    // represented in the continent floor tree. They can still render tiles.
+    const details = await this.getJson<ApiMapDetails>(detailsPath, forceRefresh)
+      .catch((): ApiMapDetails => ({}));
+    const tasks = details.tasks ?? {};
+    const pointsOfInterest = details.points_of_interest ?? {};
+    const center = details.label_coord ?? [
+      (map.continent_rect[0][0] + map.continent_rect[1][0]) / 2,
+      (map.continent_rect[0][1] + map.continent_rect[1][1]) / 2,
+    ];
+    this.loadedMapIds.add(mapId);
 
     return {
       id: map.id,
       name: map.name,
       minLevel: map.min_level,
       maxLevel: map.max_level,
+      continentId: map.continent_id,
+      continentName: map.continent_name ?? continent.name,
+      floorId: map.default_floor,
+      regionId: map.region_id,
+      regionName: map.region_name,
+      continentDimensions: continent.continent_dims,
+      minZoom: continent.min_zoom,
+      // The continents endpoint reports the upper bound of the zoom range,
+      // while the tile service uses zero-based zoom levels below that bound.
+      maxZoom: Math.max(continent.min_zoom, continent.max_zoom - 1),
       mapRect: map.map_rect,
       continentRect: map.continent_rect,
-      hearts: Object.values(map.tasks)
+      center,
+      hearts: Object.values(tasks)
         .map((task) => ({
           id: task.id,
           name: task.objective,
@@ -94,7 +147,7 @@ export class Gw2ApiClient {
           coordinate: task.coord,
         }))
         .sort((a, b) => a.level - b.level || a.id - b.id),
-      pointsOfInterest: Object.values(map.points_of_interest)
+      pointsOfInterest: Object.values(pointsOfInterest)
         .filter(
           (point): point is ApiPointOfInterest & { name: string } =>
             point.type === "landmark" && typeof point.name === "string",
@@ -110,7 +163,7 @@ export class Gw2ApiClient {
 
   status() {
     return {
-      registeredMaps: [...MAPS.keys()],
+      loadedMaps: [...this.loadedMapIds],
       cachedResponses: this.cache.size,
       inFlightRequests: this.inFlight.size,
     };
