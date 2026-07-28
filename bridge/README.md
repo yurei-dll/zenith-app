@@ -6,7 +6,7 @@ allowlisted Guild Wars 2 API data. It never sends input to the game.
 ## Modes
 
 ```bash
-# Automatic: native MumbleLink on Windows, demo telemetry elsewhere
+# Automatic: native MumbleLink on Windows, Proton relay on Linux
 npm run dev:bridge
 
 # Explicit moving Queensdale simulator
@@ -14,12 +14,21 @@ npm run bridge:mock
 
 # Explicit native Windows MumbleLink reader
 npm run bridge:mumble
+
+# Explicit Proton relay + native Linux backend
+npm run bridge:proton
 ```
 
-The Windows source opens the existing `MumbleLink` file mapping read-only,
-copies each snapshot before parsing it, and reconnects when Guild Wars 2 is not
-running or restarts. It prefers the continent-coordinate `playerX`/`playerY`
-fields from the extended GW2 context.
+The Windows source and Proton relay create-or-open the standard `MumbleLink`
+mapping, map their own views read-only, copy each snapshot before parsing, and
+reconnect when Guild Wars 2 is not running or restarts. They prefer the
+continent-coordinate `playerX`/`playerY` fields from the extended GW2 context.
+
+On Linux, the launcher waits for GW2, discovers its live Wine prefix and
+loader, inherits its fsync/esync settings, and runs the 56 KB relay inside that
+same wineserver. The relay forwards a versioned binary packet to UDP
+`127.0.0.1:38423`; the HTTP/WebSocket backend remains a native Linux process.
+See `proton/README.md` for the boundary and reproducible build details.
 
 ## HTTP API
 

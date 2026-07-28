@@ -6,6 +6,7 @@ import {
 } from "./mumblelink-parser.js";
 
 const FILE_MAP_READ = 0x0004;
+const PAGE_READWRITE = 0x04;
 
 export async function createMumbleLinkSource(): Promise<TelemetrySource> {
   if (process.platform !== "win32") {
@@ -25,6 +26,12 @@ export async function createMumbleLinkSource(): Promise<TelemetrySource> {
     "MapViewOfFile",
     "void *",
     ["void *", "uint32_t", "uint32_t", "uint32_t", "size_t"],
+  );
+  const CreateFileMappingW = kernel32.func(
+    "win64",
+    "CreateFileMappingW",
+    "void *",
+    ["void *", "void *", "uint32_t", "uint32_t", "uint32_t", "str16"],
   );
   const UnmapViewOfFile = kernel32.func(
     "win64",
@@ -51,6 +58,16 @@ export async function createMumbleLinkSource(): Promise<TelemetrySource> {
     if (viewPointer || now - lastOpenAttempt < 1000) return Boolean(viewPointer);
     lastOpenAttempt = now;
     mapping = OpenFileMappingW(FILE_MAP_READ, false, "MumbleLink");
+    if (!mapping) {
+      mapping = CreateFileMappingW(
+        -1n,
+        null,
+        PAGE_READWRITE,
+        0,
+        MUMBLE_LINK_SIZE,
+        "MumbleLink",
+      );
+    }
     if (!mapping) return false;
     viewPointer = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, MUMBLE_LINK_SIZE);
     if (!viewPointer) {

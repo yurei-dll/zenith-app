@@ -4,6 +4,7 @@ import { Gw2ApiClient } from "./gw2-api.js";
 import { createHttpHandler } from "./http.js";
 import { createMockSource } from "./mock.js";
 import { createMumbleLinkSource } from "./mumblelink.js";
+import { createProtonSource } from "./proton.js";
 import type { PlayerSnapshot, TelemetrySource } from "./types.js";
 
 const HOST = "127.0.0.1";
@@ -19,12 +20,14 @@ if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) {
 function requestedMode() {
   if (process.argv.includes("--mock")) return "mock";
   if (process.argv.includes("--mumble")) return "mumblelink";
-  return process.platform === "win32" ? "mumblelink" : "mock";
+  if (process.argv.includes("--proton")) return "proton";
+  return process.platform === "win32" ? "mumblelink" : "proton";
 }
 
 async function createSource(): Promise<TelemetrySource> {
   const mode = requestedMode();
   if (mode === "mock") return createMockSource();
+  if (mode === "proton") return createProtonSource();
   return createMumbleLinkSource();
 }
 

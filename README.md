@@ -15,9 +15,9 @@ player choose and track objectives without automating game input.
 - responsive desktop and compact layouts.
 
 The local backend uses native read-only MumbleLink telemetry on Windows and a
-simulator elsewhere, so the complete browser experience remains available on
-any development machine. It also provides cached, allowlisted access to public
-Guild Wars 2 map data.
+small same-prefix relay when GW2 runs through Proton on Linux. An explicit
+simulator remains available for development without the game. The backend also
+provides cached, allowlisted access to public Guild Wars 2 map data.
 
 ## Run it
 
@@ -30,7 +30,8 @@ npm run dev
 
 Open <http://127.0.0.1:5173>. `npm run dev` starts both the Vite app and the
 loopback-only backend at `http://127.0.0.1:38421`; player snapshots use its
-root WebSocket endpoint.
+root WebSocket endpoint. On Linux, the relay waits for a running `Gw2-64.exe`
+and automatically joins its live Proton prefix.
 
 ```bash
 npm test
@@ -41,10 +42,13 @@ npm run build
 ## Architecture
 
 ```text
-GW2 MumbleLink shared memory ── read-only ──┐
-                                             ▼
-ArenaNet public API ── cache/allowlist ── local backend :38421
+GW2 MumbleLink shared memory
+   ├── Windows: native backend
+   └── Proton: same-prefix relay ── loopback UDP
                                              │
+                                             ▼
+ArenaNet public API ── cache/allowlist ── native backend :38421
+                                             ▼
                          normalized WebSocket│and HTTP API
                                              ▼
 React state ── OpenLayers map ── completion store (localStorage)

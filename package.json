@@ -9,6 +9,8 @@
     "dev:bridge": "tsx watch bridge/src/index.ts",
     "bridge:mock": "tsx bridge/src/index.ts --mock",
     "bridge:mumble": "tsx bridge/src/index.ts --mumble",
+    "bridge:proton": "tsx bridge/src/index.ts --proton",
+    "build:proton-relay": "scripts/build-proton-relay.sh",
     "build": "tsc -b && vite build",
     "check": "tsc -b && eslint .",
     "test": "vitest run"
